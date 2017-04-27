@@ -82,13 +82,12 @@ func TestNewIPWhitelister(t *testing.T) {
 			whitelister, err := NewIPWhitelister(test.whitelistStrings)
 			if test.errMessage != "" {
 				require.EqualError(t, err, test.errMessage)
-			}
-			assert.NoError(t, err)
-
-			for index, actual := range whitelister.whitelists {
-				expected := test.expectedWhitelists[index]
-				assert.Equal(t, expected.IP, actual.IP)
-				assert.Equal(t, expected.Mask.String(), actual.Mask.String())
+			} else {
+				for index, actual := range whitelister.whitelists {
+					expected := test.expectedWhitelists[index]
+					assert.Equal(t, expected.IP, actual.IP)
+					assert.Equal(t, expected.Mask.String(), actual.Mask.String())
+				}
 			}
 		})
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNewServerWithoutWhitelistSourceRange(t *testing.T) {
+func TestNewServerWithWhitelistSourceRange(t *testing.T) {
 	cases := []struct {
 		desc                 string
 		whitelistStrings     []string
@@ -44,13 +44,14 @@ func TestNewServerWithoutWhitelistSourceRange(t *testing.T) {
 
 			if tc.errMessage != "" {
 				require.EqualError(t, err, tc.errMessage)
-			}
-			assert.NoError(t, err)
-
-			if tc.middlewareConfigured {
-				require.NotNil(t, middleware, "not expected middleware to be configured")
 			} else {
-				require.Nil(t, middleware, "expected middleware to be configured")
+				assert.NoError(t, err)
+
+				if tc.middlewareConfigured {
+					require.NotNil(t, middleware, "not expected middleware to be configured")
+				} else {
+					require.Nil(t, middleware, "expected middleware to be configured")
+				}
 			}
 		})
 	}
