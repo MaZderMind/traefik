@@ -83,6 +83,7 @@ func TestNewIPWhitelister(t *testing.T) {
 			if test.errMessage != "" {
 				require.EqualError(t, err, test.errMessage)
 			} else {
+				require.NoError(t, err);
 				for index, actual := range whitelister.whitelists {
 					expected := test.expectedWhitelists[index]
 					assert.Equal(t, expected.IP, actual.IP)
@@ -270,7 +271,7 @@ func TestIPWhitelisterHandle(t *testing.T) {
 			t.Parallel()
 			whitelister, err := NewIPWhitelister(test.whitelistStrings)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, whitelister)
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +282,7 @@ func TestIPWhitelisterHandle(t *testing.T) {
 
 			for _, testIP := range test.passIPs {
 				req, err := http.NewRequest("GET", "/", nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req.RemoteAddr = testIP + ":2342"
 				recorder := httptest.NewRecorder()
@@ -293,7 +294,7 @@ func TestIPWhitelisterHandle(t *testing.T) {
 
 			for _, testIP := range test.rejectIPs {
 				req, err := http.NewRequest("GET", "/", nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req.RemoteAddr = testIP + ":2342"
 				recorder := httptest.NewRecorder()
