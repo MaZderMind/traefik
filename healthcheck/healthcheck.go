@@ -2,6 +2,7 @@ package healthcheck
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -23,16 +24,23 @@ func GetHealthCheck() *HealthCheck {
 	return singleton
 }
 
-// BackendHealthCheck HealthCheck configuration for a backend
-type BackendHealthCheck struct {
-	Path           string
-	Interval       time.Duration
-	DisabledURLs   []*url.URL
-	requestTimeout time.Duration
-	lb             loadBalancer
+// Options are the public health check options.
+type Options struct {
+	Path     string
+	Interval time.Duration
+	LB       LoadBalancer
 }
 
-var launch = false
+func (opt Options) String() string {
+	return fmt.Sprintf("[Path: %s Interval: %s]", opt.Path, opt.Interval)
+}
+
+// BackendHealthCheck HealthCheck configuration for a backend
+type BackendHealthCheck struct {
+	Options
+	disabledURLs   []*url.URL
+	requestTimeout time.Duration
+}
 
 //HealthCheck struct
 type HealthCheck struct {
@@ -40,7 +48,8 @@ type HealthCheck struct {
 	cancel   context.CancelFunc
 }
 
-type loadBalancer interface {
+// LoadBalancer includes functionality for load-balancing management.
+type LoadBalancer interface {
 	RemoveServer(u *url.URL) error
 	UpsertServer(u *url.URL, options ...roundrobin.ServerOption) error
 	Servers() []*url.URL
@@ -53,12 +62,10 @@ func newHealthCheck() *HealthCheck {
 }
 
 // NewBackendHealthCheck Instantiate a new BackendHealthCheck
-func NewBackendHealthCheck(Path string, interval time.Duration, lb loadBalancer) *BackendHealthCheck {
+func NewBackendHealthCheck(options Options) *BackendHealthCheck {
 	return &BackendHealthCheck{
-		Path:           Path,
-		Interval:       interval,
+		Options:        options,
 		requestTimeout: 5 * time.Second,
-		lb:             lb,
 	}
 }
 
@@ -98,24 +105,24 @@ func (hc *HealthCheck) execute(ctx context.Context, backendID string, backend *B
 }
 
 func checkBackend(currentBackend *BackendHealthCheck) {
-	enabledURLs := currentBackend.lb.Servers()
+	enabledURLs := currentBackend.LB.Servers()
 	var newDisabledURLs []*url.URL
-	for _, url := range currentBackend.DisabledURLs {
+	for _, url := range currentBackend.disabledURLs {
 		if checkHealth(url, currentBackend) {
 			log.Debugf("HealthCheck is up [%s]: Upsert in server list", url.String())
-			currentBackend.lb.UpsertServer(url, roundrobin.Weight(1))
+			currentBackend.LB.UpsertServer(url, roundrobin.Weight(1))
 		} else {
 			log.Warnf("HealthCheck is still failing [%s]", url.String())
 			newDisabledURLs = append(newDisabledURLs, url)
 		}
 	}
-	currentBackend.DisabledURLs = newDisabledURLs
+	currentBackend.disabledURLs = newDisabledURLs
 
 	for _, url := range enabledURLs {
 		if !checkHealth(url, currentBackend) {
 			log.Warnf("HealthCheck has failed [%s]: Remove from server list", url.String())
-			currentBackend.lb.RemoveServer(url)
-			currentBackend.DisabledURLs = append(currentBackend.DisabledURLs, url)
+			currentBackend.LB.RemoveServer(url)
+			currentBackend.disabledURLs = append(currentBackend.disabledURLs, url)
 		}
 	}
 }

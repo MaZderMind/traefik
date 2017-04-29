@@ -269,6 +269,27 @@ Supported filters:
 # attempts = 3
 ```
 
+## Health check configuration
+```toml
+# Enable custom health check options.
+#
+# Optional
+#
+[healthcheck]
+
+# Set the default health check interval. Will only be effective if health check
+# paths are defined. Given provider-specific support, the value may be
+# overridden on a per-backend basis.
+# Can be provided in a format supported by [time.ParseDuration](https://golang.org/pkg/time/#ParseDuration) or as raw
+# values (digits). If no units are provided, the value is parsed assuming
+# seconds.
+#
+# Optional
+# Default: "30s"
+#
+# interval = "30s"
+```
+
 ## ACME (Let's Encrypt) configuration
 
 ```toml
@@ -996,6 +1017,8 @@ Labels can be used on containers to override default behaviour:
 - `traefik.backend.loadbalancer.method=drr`: override the default `wrr` load balancer algorithm
 - `traefik.backend.loadbalancer.sticky=true`: enable backend sticky sessions
 - `traefik.backend.circuitbreaker.expression=NetworkErrorRatio() > 0.5`: create a [circuit breaker](/basics/#backends) to be used against the backend
+- `traefik.backend.healthcheck.path=/health`: set the Traefik health check path [default: no health checks]
+- `traefik.backend.healthcheck.interval=5s`: sets a custom health check interval in Go-parseable (`time.ParseDuration`) format [default: 30s]
 - `traefik.portIndex=1`: register port by index in the application's ports array. Useful when the application exposes multiple ports.
 - `traefik.port=80`: register the explicit application port value. Cannot be used alongside `traefik.portIndex`.
 - `traefik.protocol=https`: override the default `http` protocol
@@ -1319,6 +1342,13 @@ prefix = "/traefik"
 #
 # filename = "etcd.tmpl"
 
+# Use etcd user/pass authentication
+#
+# Optional
+#
+# username = foo
+# password = bar
+
 # Enable etcd TLS connection
 #
 # Optional
@@ -1597,25 +1627,24 @@ ExposedByDefault = false
 
 # Endpoint to use when connecting to Rancher
 #
-# Optional
-# Endpoint = "http://rancherserver.example.com"
+# Required
+# Endpoint = "http://rancherserver.example.com/v1"
 
 # AccessKey to use when connecting to Rancher
 #
-# Optional
-# AccessKey = "XXXXXXXXX"
+# Required
+# AccessKey = "XXXXXXXXXXXXXXXXXXXX"
 
 # SecretKey to use when connecting to Rancher
 #
-# Optional
-# SecretKey = "XXXXXXXXXXX"
+# Required
+# SecretKey = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 ```
 
-If you're deploying traefik as a service within rancher, you can alternatively set these labels on the service to let it only fetch data of its current environment. The settings `endpoint`, `accesskey` and `secretkey` can be omitted then.
+As traefik needs access to the rancher API, you need to set the `endpoint`, `accesskey` and `secretkey` parameters. 
 
-- `io.rancher.container.create_agent=true`
-- `io.rancher.container.agent.role=environment`
+To enable traefik to fetch information about the Environment it's deployed in only, you need to create an `Environment API Key`. This can be found within the API Key advanced options.
 
 Labels can be used on task containers to override default behaviour:
 

@@ -62,9 +62,11 @@ type serverEntryPoint struct {
 }
 
 type serverRoute struct {
-	route         *mux.Route
-	stripPrefixes []string
-	addPrefix     string
+	route              *mux.Route
+	stripPrefixes      []string
+	stripPrefixesRegex []string
+	addPrefix          string
+	replacePath        string
 }
 
 // NewServer returns an initialized Server.
@@ -657,16 +659,10 @@ func (server *Server) loadConfig(configurations configs, globalConfiguration Glo
 									log.Errorf("Skipping frontend %s...", frontendName)
 									continue frontend
 								}
-								if configuration.Backends[frontend.Backend].HealthCheck != nil {
-									var interval time.Duration
-									if configuration.Backends[frontend.Backend].HealthCheck.Interval != "" {
-										interval, err = time.ParseDuration(configuration.Backends[frontend.Backend].HealthCheck.Interval)
-										if err != nil {
-											log.Errorf("Wrong healthcheck interval: %s", err)
-											interval = time.Second * 30
-										}
-									}
-									backendsHealthcheck[frontend.Backend] = healthcheck.NewBackendHealthCheck(configuration.Backends[frontend.Backend].HealthCheck.Path, interval, rebalancer)
+								hcOpts := parseHealthCheckOptions(rebalancer, frontend.Backend, configuration.Backends[frontend.Backend].HealthCheck, *globalConfiguration.HealthCheck)
+								if hcOpts != nil {
+									log.Debugf("Setting up backend health check %s", *hcOpts)
+									backendsHealthcheck[frontend.Backend] = healthcheck.NewBackendHealthCheck(*hcOpts)
 								}
 							}
 						case types.Wrr:
@@ -690,16 +686,10 @@ func (server *Server) loadConfig(configurations configs, globalConfiguration Glo
 									continue frontend
 								}
 							}
-							if configuration.Backends[frontend.Backend].HealthCheck != nil {
-								var interval time.Duration
-								if configuration.Backends[frontend.Backend].HealthCheck.Interval != "" {
-									interval, err = time.ParseDuration(configuration.Backends[frontend.Backend].HealthCheck.Interval)
-									if err != nil {
-										log.Errorf("Wrong healthcheck interval: %s", err)
-										interval = time.Second * 30
-									}
-								}
-								backendsHealthcheck[frontend.Backend] = healthcheck.NewBackendHealthCheck(configuration.Backends[frontend.Backend].HealthCheck.Path, interval, rr)
+							hcOpts := parseHealthCheckOptions(rr, frontend.Backend, configuration.Backends[frontend.Backend].HealthCheck, *globalConfiguration.HealthCheck)
+							if hcOpts != nil {
+								log.Debugf("Setting up backend health check %s", *hcOpts)
+								backendsHealthcheck[frontend.Backend] = healthcheck.NewBackendHealthCheck(*hcOpts)
 							}
 						}
 						maxConns := configuration.Backends[frontend.Backend].MaxConn
@@ -829,6 +819,19 @@ func (server *Server) wireFrontendBackend(serverRoute *serverRoute, handler http
 		}
 	}
 
+	// strip prefix with regex
+	if len(serverRoute.stripPrefixesRegex) > 0 {
+		handler = middlewares.NewStripPrefixRegex(handler, serverRoute.stripPrefixesRegex)
+	}
+
+	// path replace
+	if len(serverRoute.replacePath) > 0 {
+		handler = &middlewares.ReplacePath{
+			Path:    serverRoute.replacePath,
+			Handler: handler,
+		}
+	}
+
 	serverRoute.route.Handler(handler)
 }
 
@@ -867,6 +870,31 @@ func (server *Server) buildDefaultHTTPRouter() *mux.Router {
 	router.StrictSlash(true)
 	router.SkipClean(true)
 	return router
+}
+
+func parseHealthCheckOptions(lb healthcheck.LoadBalancer, backend string, hc *types.HealthCheck, hcConfig HealthCheckConfig) *healthcheck.Options {
+	if hc == nil || hc.Path == "" {
+		return nil
+	}
+
+	interval := time.Duration(hcConfig.Interval)
+	if hc.Interval != "" {
+		intervalOverride, err := time.ParseDuration(hc.Interval)
+		switch {
+		case err != nil:
+			log.Errorf("Illegal healthcheck interval for backend '%s': %s", backend, err)
+		case intervalOverride <= 0:
+			log.Errorf("Healthcheck interval smaller than zero for backend '%s', backend", backend)
+		default:
+			interval = intervalOverride
+		}
+	}
+
+	return &healthcheck.Options{
+		Path:     hc.Path,
+		Interval: interval,
+		LB:       lb,
+	}
 }
 
 func getRoute(serverRoute *serverRoute, route *types.Route) error {

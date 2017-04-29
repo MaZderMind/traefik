@@ -75,6 +75,23 @@ func (r *Rules) pathStrip(paths ...string) *mux.Route {
 	return r.route.route
 }
 
+func (r *Rules) pathStripRegex(paths ...string) *mux.Route {
+	sort.Sort(bySize(paths))
+	r.route.stripPrefixesRegex = paths
+	router := r.route.route.Subrouter()
+	for _, path := range paths {
+		router.Path(strings.TrimSpace(path))
+	}
+	return r.route.route
+}
+
+func (r *Rules) replacePath(paths ...string) *mux.Route {
+	for _, path := range paths {
+		r.route.replacePath = path
+	}
+	return r.route.route
+}
+
 func (r *Rules) addPrefix(paths ...string) *mux.Route {
 	for _, path := range paths {
 		r.route.addPrefix = path
@@ -85,6 +102,16 @@ func (r *Rules) addPrefix(paths ...string) *mux.Route {
 func (r *Rules) pathPrefixStrip(paths ...string) *mux.Route {
 	sort.Sort(bySize(paths))
 	r.route.stripPrefixes = paths
+	router := r.route.route.Subrouter()
+	for _, path := range paths {
+		router.PathPrefix(strings.TrimSpace(path))
+	}
+	return r.route.route
+}
+
+func (r *Rules) pathPrefixStripRegex(paths ...string) *mux.Route {
+	sort.Sort(bySize(paths))
+	r.route.stripPrefixesRegex = paths
 	router := r.route.route.Subrouter()
 	for _, path := range paths {
 		router.PathPrefix(strings.TrimSpace(path))
@@ -106,16 +133,19 @@ func (r *Rules) headersRegexp(headers ...string) *mux.Route {
 
 func (r *Rules) parseRules(expression string, onRule func(functionName string, function interface{}, arguments []string) error) error {
 	functions := map[string]interface{}{
-		"Host":            r.host,
-		"HostRegexp":      r.hostRegexp,
-		"Path":            r.path,
-		"PathStrip":       r.pathStrip,
-		"PathPrefix":      r.pathPrefix,
-		"PathPrefixStrip": r.pathPrefixStrip,
-		"Method":          r.methods,
-		"Headers":         r.headers,
-		"HeadersRegexp":   r.headersRegexp,
-		"AddPrefix":       r.addPrefix,
+		"Host":                 r.host,
+		"HostRegexp":           r.hostRegexp,
+		"Path":                 r.path,
+		"PathStrip":            r.pathStrip,
+		"PathStripRegex":       r.pathStripRegex,
+		"PathPrefix":           r.pathPrefix,
+		"PathPrefixStrip":      r.pathPrefixStrip,
+		"PathPrefixStripRegex": r.pathPrefixStripRegex,
+		"Method":               r.methods,
+		"Headers":              r.headers,
+		"HeadersRegexp":        r.headersRegexp,
+		"AddPrefix":            r.addPrefix,
+		"ReplacePath":          r.replacePath,
 	}
 
 	if len(expression) == 0 {
